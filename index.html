@@ -211,21 +211,70 @@ if (data.tipo !== 'I' || data.receptorRFC !== 'PDD031204KL5') {
       });
       const yaExisteSupa = await existeSupa.json();
 
-      const datosInsert = {
-        uuid_cfdi: data.uuid,
-        fecha: data.fecha,
-        rfc_emisor: data.emisorRFC,
-        razon_social_emisor: data.razonSocial,
-        factura: data.folio,
-        serie: data.serie,
-        total: parseFloat(data.total),
-        conceptos_detalle: data.conceptosDetalle,
-        factura_pagada: 'NO',
-        factura_fisicamente: 'NO',
-        comentario_factura_fisica: '',
-        fotos: [],
-        fecha_certificacion: data.fecha_certificacion
-      };
+const datosInsert = {
+  // ===== COMPROBANTE =====
+  version: comprobante.getAttribute("Version"),
+  serie: comprobante.getAttribute("Serie") || "",
+  folio: comprobante.getAttribute("Folio") || "",
+  fecha: comprobante.getAttribute("Fecha"),
+  sello: comprobante.getAttribute("Sello"),
+  forma_pago: comprobante.getAttribute("FormaPago") || "",
+  condiciones_pago: comprobante.getAttribute("CondicionesDePago") || "",
+  subtotal: parseFloat(comprobante.getAttribute("SubTotal") || 0),
+  descuento: parseFloat(comprobante.getAttribute("Descuento") || 0),
+  moneda: comprobante.getAttribute("Moneda") || "",
+  tipo_cambio: comprobante.getAttribute("TipoCambio") || "",
+  total: parseFloat(comprobante.getAttribute("Total") || 0),
+  tipo_comprobante: comprobante.getAttribute("TipoDeComprobante") || "",
+  exportacion: comprobante.getAttribute("Exportacion") || "",
+  metodo_pago: comprobante.getAttribute("MetodoPago") || "",
+  lugar_expedicion: comprobante.getAttribute("LugarExpedicion") || "",
+  confirmacion: comprobante.getAttribute("Confirmacion") || null,
+
+  // ===== EMISOR =====
+  rfc_emisor: emisor.getAttribute("Rfc"),
+  nombre_emisor: emisor.getAttribute("Nombre") || "",
+  regimen_fiscal_emisor: emisor.getAttribute("RegimenFiscal") || "",
+
+  // ===== RECEPTOR =====
+  rfc_receptor: receptor.getAttribute("Rfc"),
+  nombre_receptor: receptor.getAttribute("Nombre") || "",
+  domicilio_fiscal_receptor: receptor.getAttribute("DomicilioFiscalReceptor") || "",
+  residencia_fiscal: receptor.getAttribute("ResidenciaFiscal") || "",
+  num_reg_id_trib: receptor.getAttribute("NumRegIdTrib") || "",
+  regimen_fiscal_receptor: receptor.getAttribute("RegimenFiscalReceptor") || "",
+  uso_cfdi: receptor.getAttribute("UsoCFDI") || "",
+
+  // ===== IMPUESTOS GLOBALES =====
+  total_traslados: impuestosGlobales.totalTraslados,
+  total_retenidos: impuestosGlobales.totalRetenidos,
+  iva_16: impuestosGlobales.iva16,
+  iva_08: impuestosGlobales.iva08,
+  iva_exento: impuestosGlobales.ivaExento,
+  ieps: impuestosGlobales.ieps,
+  isr_retenido: impuestosGlobales.isrRet,
+
+  // ===== TIMBRE =====
+  uuid_cfdi: uuid,
+  fecha_certificacion: timbre.getAttribute("FechaTimbrado"),
+  no_certificado_sat: timbre.getAttribute("NoCertificadoSAT"),
+  rfc_prov_certif: timbre.getAttribute("RfcProvCertif"),
+  sello_cfd: timbre.getAttribute("SelloCFD"),
+  sello_sat: timbre.getAttribute("SelloSAT"),
+
+  // ===== CONCEPTOS =====
+  conceptos_detalle: conceptosDetalle, // cada concepto completo
+
+  // ===== COMPLEMENTOS =====
+  complementos: complementosDetectados, // XML serializado o JSON
+
+  // ===== ESTADOS OPERATIVOS =====
+  factura_pagada: "NO",
+  factura_fisicamente: "NO",
+  comentario_factura_fisica: "",
+  fotos: []
+};
+
 
       // === SUPABASE ===
       if (yaExisteSupa.length === 0) {
