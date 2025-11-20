@@ -27,7 +27,6 @@
     .ok { color: green; }
     .warn { color: orange; }
     .err { color: red; }
-    .pending { color: blue; }
     pre {
       background: #111;
       color: #0f0;
@@ -80,6 +79,9 @@
 
   let archivosDatos = [];
 
+  // ==========================================================
+  // LECTURA DE XML
+  // ==========================================================
   document.getElementById('xmlInput').addEventListener('change', async function () {
     archivosDatos = [];
     document.getElementById('listaSupabase').innerHTML = '';
@@ -93,114 +95,181 @@
 
         const cfdiNS = "http://www.sat.gob.mx/cfd/4";
         const tfdNS = "http://www.sat.gob.mx/TimbreFiscalDigital";
+
         const comprobante = xml.getElementsByTagNameNS(cfdiNS, "Comprobante")[0];
         const timbre = xml.getElementsByTagNameNS(tfdNS, "TimbreFiscalDigital")[0];
         const emisor = xml.getElementsByTagNameNS(cfdiNS, "Emisor")[0];
         const receptor = xml.getElementsByTagNameNS(cfdiNS, "Receptor")[0];
+        const conceptos = xml.getElementsByTagNameNS(cfdiNS, "Concepto");
+        const impuestosGlobalesNodo = xml.getElementsByTagNameNS(cfdiNS, "Impuestos")[0];
 
-        const tipo = comprobante?.getAttribute("TipoDeComprobante");
         const uuid = timbre?.getAttribute("UUID")?.toUpperCase().trim();
+        const tipo = comprobante?.getAttribute("TipoDeComprobante");
         const receptorRFC = receptor?.getAttribute("Rfc")?.toUpperCase().trim();
-        const emisorRFC = emisor?.getAttribute("Rfc")?.toUpperCase().trim();
-        const razonSocial = emisor?.getAttribute("Nombre");
-        const folio = comprobante?.getAttribute("Folio") || '';
-        const serie = comprobante?.getAttribute("Serie") || '';
-        const total = parseFloat(comprobante?.getAttribute("Total")) || 0;
-        const fecha = comprobante?.getAttribute("Fecha");
-        const fechaTimbrado = timbre?.getAttribute("FechaTimbrado") || null;
 
-let conceptosDetalle = [];
-const conceptos = xml.getElementsByTagNameNS(cfdiNS, "Concepto");
+        // ==========================================================
+        // CONCEPTOS COMPLETOS
+        // ==========================================================
+        let conceptosDetalle = [];
 
-for (let c of conceptos) {
+        for (let c of conceptos) {
+          let conceptoObj = {
+            claveProdServ: c.getAttribute("ClaveProdServ") || "",
+            noIdentificacion: c.getAttribute("NoIdentificacion") || "",
+            cantidad: parseFloat(c.getAttribute("Cantidad") || 0),
+            claveUnidad: c.getAttribute("ClaveUnidad") || "",
+            unidad: c.getAttribute("Unidad") || "",
+            descripcion: c.getAttribute("Descripcion") || "",
+            valorUnitario: parseFloat(c.getAttribute("ValorUnitario") || 0),
+            importe: parseFloat(c.getAttribute("Importe") || 0),
+            descuento: parseFloat(c.getAttribute("Descuento") || 0),
+            traslados: [],
+            retenciones: []
+          };
 
-  // --- Datos básicos del concepto ---
-  const cantidad = parseFloat(c.getAttribute("Cantidad")) || 0;
-  const descripcion = c.getAttribute("Descripcion") || "";
-  const codigoSAT = c.getAttribute("ClaveProdServ") || "";
-  const valorUnitario = parseFloat(c.getAttribute("ValorUnitario")) || 0;
+          const impuestosNodo = c.getElementsByTagNameNS(cfdiNS, "Impuestos")[0];
 
-  // --- Inicializamos impuestos por concepto ---
-  let tasaImpuesto = 0;
-  let tipoImpuesto = "";
+          if (impuestosNodo) {
+            const traslados = impuestosNodo.getElementsByTagNameNS(cfdiNS, "Traslado");
+            for (let t of traslados) {
+              conceptoObj.traslados.push({
+                impuesto: t.getAttribute("Impuesto"),
+                tipoFactor: t.getAttribute("TipoFactor"),
+                tasa: parseFloat(t.getAttribute("TasaOCuota") || 0),
+                importe: parseFloat(t.getAttribute("Importe") || 0)
+              });
+            }
 
-  // --- Nodo impuestos dentro del concepto ---
-  const impuestosNodo = c.getElementsByTagNameNS(cfdiNS, "Impuestos")[0];
+            const retenciones = impuestosNodo.getElementsByTagNameNS(cfdiNS, "Retencion");
+            for (let r of retenciones) {
+              conceptoObj.retenciones.push({
+                impuesto: r.getAttribute("Impuesto"),
+                tipoFactor: r.getAttribute("TipoFactor"),
+                tasa: parseFloat(r.getAttribute("TasaOCuota") || 0),
+                importe: parseFloat(r.getAttribute("Importe") || 0)
+              });
+            }
+          }
 
-  if (impuestosNodo) {
-    const traslados = impuestosNodo.getElementsByTagNameNS(cfdiNS, "Traslado");
+          conceptosDetalle.push(conceptoObj);
+        }
 
-    if (traslados.length > 0) {
-      const t = traslados[0];
+        // ==========================================================
+        // IMPUESTOS GLOBALES — OPCIÓN 3
+        // ==========================================================
+        let impuestosGlobales = {
+          detalles: [],
+          total_trasladados: 0,
+          total_retenidos: 0
+        };
 
-      tasaImpuesto = parseFloat(t.getAttribute("TasaOCuota")) || 0;
+        if (impuestosGlobalesNodo) {
+          const traslados = impuestosGlobalesNodo.getElementsByTagNameNS(cfdiNS, "Traslado");
+          for (let t of traslados) {
+            const importe = parseFloat(t.getAttribute("Importe") || 0);
 
-      const impuestoSAT = t.getAttribute("Impuesto"); // 002=IVA, 003=IEPS, 001=ISR
+            impuestosGlobales.detalles.push({
+              tipo: t.getAttribute("Impuesto") === "002" ? "IVA"
+                   : t.getAttribute("Impuesto") === "003" ? "IEPS"
+                   : t.getAttribute("Impuesto") === "001" ? "ISR"
+                   : t.getAttribute("Impuesto"),
+              tasa: parseFloat(t.getAttribute("TasaOCuota") || 0),
+              importe
+            });
 
-      tipoImpuesto =
-        impuestoSAT === "002"
-          ? "IVA"
-          : impuestoSAT === "003"
-          ? "IEPS"
-          : impuestoSAT === "001"
-          ? "ISR"
-          : impuestoSAT;
+            impuestosGlobales.total_trasladados += importe;
+          }
+
+          const retenciones = impuestosGlobalesNodo.getElementsByTagNameNS(cfdiNS, "Retencion");
+          for (let r of retenciones) {
+            const importe = parseFloat(r.getAttribute("Importe") || 0);
+
+            impuestosGlobales.detalles.push({
+              tipo: r.getAttribute("Impuesto") === "002" ? "IVA"
+                   : r.getAttribute("Impuesto") === "003" ? "IEPS"
+                   : r.getAttribute("Impuesto") === "001" ? "ISR"
+                   : r.getAttribute("Impuesto"),
+              tasa: parseFloat(r.getAttribute("TasaOCuota") || 0),
+              importe
+            });
+
+            impuestosGlobales.total_retenidos += importe;
+          }
+        }
+
+        // ==========================================================
+        // COMPLEMENTOS DETECTADOS
+        // ==========================================================
+        let complementosDetectados = [];
+
+        const complementos = xml.getElementsByTagName("cfdi:Complemento");
+        if (complementos.length > 0) {
+          const nodos = complementos[0].children;
+          for (let nodo of nodos) {
+            complementosDetectados.push({
+              nombre: nodo.nodeName,
+              atributos: [...nodo.attributes].map(a => ({
+                nombre: a.name,
+                valor: a.value
+              }))
+            });
+          }
+        }
+
+        // ==========================================================
+        // GUARDAR TODO EN UNA SOLA ESTRUCTURA
+        // ==========================================================
+        archivosDatos.push({
+          uuid,
+          tipo,
+          receptorRFC,
+          // datos completos necesarios para procesar
+          comprobante,
+          timbre,
+          emisor,
+          receptor,
+          conceptosDetalle,
+          impuestosGlobales,
+          complementosDetectados
+        });
+
+        // Pintar UI
+        const li1 = document.createElement("li");
+        li1.innerHTML = `<span class='pending'>${uuid}</span>`;
+        document.getElementById("listaSupabase").appendChild(li1);
+
+        const li2 = document.createElement("li");
+        li2.innerHTML = `<span class='pending'>${uuid}</span>`;
+        document.getElementById("listaFirebase").appendChild(li2);
+
+      } catch (error) {
+        logBitacora("❌ Error procesando archivo: " + error);
+      }
     }
-  }
-
-  // --- Agregar concepto final ---
-  conceptosDetalle.push({
-    cantidad,
-    codigoSAT,
-    descripcion,
-    costoUnitario: valorUnitario,
-    tasaImpuesto,
-    tipoImpuesto
   });
-}
 
-// 🔥🔥🔥 AQUÍ VIENE TU ERROR ORIGINAL: TE FALTABA ESTA LÍNEA 🔥🔥🔥
-archivosDatos.push({
-  uuid,
-  tipo,
-  receptorRFC,
-  emisorRFC,
-  razonSocial,
-  folio,
-  serie,
-  total,
-  fecha,
-  fecha_certificacion: fechaTimbrado,
-  conceptosDetalle
-});
-
-}
-
-
+  // ==========================================================
+  // PROCESAR Y SUBIR A BASES DE DATOS
+  // ==========================================================
   async function procesarArchivos() {
-    const supaItems = document.querySelectorAll('#listaSupabase li');
-    const fireItems = document.querySelectorAll('#listaFirebase li');
+    const supaItems = document.querySelectorAll("#listaSupabase li");
+    const fireItems = document.querySelectorAll("#listaFirebase li");
 
     for (let i = 0; i < archivosDatos.length; i++) {
       const data = archivosDatos[i];
-      const itemSupa = supaItems[i].querySelector('span');
-      const itemFire = fireItems[i].querySelector('span');
+      const itemSupa = supaItems[i].querySelector("span");
+      const itemFire = fireItems[i].querySelector("span");
+
       if (!data.uuid) continue;
-
-if (data.tipo !== 'I' || data.receptorRFC !== 'PDD031204KL5') {
-  let motivo = '';
-  if (data.tipo !== 'I') motivo += `TipoDeComprobante "${data.tipo}" no es válido. `;
-  if (data.receptorRFC !== 'PDD031204KL5') motivo += `RFC receptor "${data.receptorRFC}" no permitido.`;
-
-  itemSupa.textContent = `Rechazado (${motivo})`;
-  itemSupa.className = 'err';
-  itemFire.textContent = `Rechazado (${motivo})`;
-  itemFire.className = 'err';
-
-  logBitacora(`❌ Rechazado ${data.uuid}: ${motivo}`);
-  continue;
-}
-
+      if (data.tipo !== "I" || data.receptorRFC !== "PDD031204KL5") {
+        const motivo = `TipoDeComprobante inválido o RFC no permitido`;
+        itemSupa.textContent = "Rechazado";
+        itemSupa.className = "err";
+        itemFire.textContent = "Rechazado";
+        itemFire.className = "err";
+        logBitacora(`❌ ${data.uuid} - ${motivo}`);
+        continue;
+      }
 
       const refFirebase = doc(db, "almacenes/ALMACENCENTRALPDD/entradas", data.uuid);
       const snapFirebase = await getDoc(refFirebase);
@@ -211,92 +280,97 @@ if (data.tipo !== 'I' || data.receptorRFC !== 'PDD031204KL5') {
       });
       const yaExisteSupa = await existeSupa.json();
 
-const datosInsert = {
-  // ===== COMPROBANTE =====
-  version: comprobante.getAttribute("Version"),
-  serie: comprobante.getAttribute("Serie") || "",
-  folio: comprobante.getAttribute("Folio") || "",
-  fecha: comprobante.getAttribute("Fecha"),
-  sello: comprobante.getAttribute("Sello"),
-  forma_pago: comprobante.getAttribute("FormaPago") || "",
-  condiciones_pago: comprobante.getAttribute("CondicionesDePago") || "",
-  subtotal: parseFloat(comprobante.getAttribute("SubTotal") || 0),
-  descuento: parseFloat(comprobante.getAttribute("Descuento") || 0),
-  moneda: comprobante.getAttribute("Moneda") || "",
-  tipo_cambio: comprobante.getAttribute("TipoCambio") || "",
-  total: parseFloat(comprobante.getAttribute("Total") || 0),
-  tipo_comprobante: comprobante.getAttribute("TipoDeComprobante") || "",
-  exportacion: comprobante.getAttribute("Exportacion") || "",
-  metodo_pago: comprobante.getAttribute("MetodoPago") || "",
-  lugar_expedicion: comprobante.getAttribute("LugarExpedicion") || "",
-  confirmacion: comprobante.getAttribute("Confirmacion") || null,
+      // ==========================================================
+      // ESTRUCTURA FINAL PARA SUBIR
+      // ==========================================================
+      const c = data.comprobante;
+      const e = data.emisor;
+      const r = data.receptor;
+      const t = data.timbre;
 
-  // ===== EMISOR =====
-  rfc_emisor: emisor.getAttribute("Rfc"),
-  nombre_emisor: emisor.getAttribute("Nombre") || "",
-  regimen_fiscal_emisor: emisor.getAttribute("RegimenFiscal") || "",
+      const datosInsert = {
+        // === Datos Comprobante ===
+        version: c.getAttribute("Version"),
+        serie: c.getAttribute("Serie") || "",
+        folio: c.getAttribute("Folio") || "",
+        fecha: c.getAttribute("Fecha"),
+        sello: c.getAttribute("Sello"),
+        forma_pago: c.getAttribute("FormaPago") || "",
+        condiciones_pago: c.getAttribute("CondicionesDePago") || "",
+        subtotal: parseFloat(c.getAttribute("SubTotal") || 0),
+        descuento: parseFloat(c.getAttribute("Descuento") || 0),
+        moneda: c.getAttribute("Moneda") || "",
+        tipo_cambio: c.getAttribute("TipoCambio") || "",
+        total: parseFloat(c.getAttribute("Total") || 0),
+        tipo_comprobante: c.getAttribute("TipoDeComprobante") || "",
+        exportacion: c.getAttribute("Exportacion") || "",
+        metodo_pago: c.getAttribute("MetodoPago") || "",
+        lugar_expedicion: c.getAttribute("LugarExpedicion") || "",
+        confirmacion: c.getAttribute("Confirmacion") || null,
 
-  // ===== RECEPTOR =====
-  rfc_receptor: receptor.getAttribute("Rfc"),
-  nombre_receptor: receptor.getAttribute("Nombre") || "",
-  domicilio_fiscal_receptor: receptor.getAttribute("DomicilioFiscalReceptor") || "",
-  residencia_fiscal: receptor.getAttribute("ResidenciaFiscal") || "",
-  num_reg_id_trib: receptor.getAttribute("NumRegIdTrib") || "",
-  regimen_fiscal_receptor: receptor.getAttribute("RegimenFiscalReceptor") || "",
-  uso_cfdi: receptor.getAttribute("UsoCFDI") || "",
+        // === Emisor ===
+        rfc_emisor: e.getAttribute("Rfc"),
+        nombre_emisor: e.getAttribute("Nombre") || "",
+        regimen_fiscal_emisor: e.getAttribute("RegimenFiscal") || "",
 
-  // ===== IMPUESTOS GLOBALES =====
-  total_traslados: impuestosGlobales.totalTraslados,
-  total_retenidos: impuestosGlobales.totalRetenidos,
-  iva_16: impuestosGlobales.iva16,
-  iva_08: impuestosGlobales.iva08,
-  iva_exento: impuestosGlobales.ivaExento,
-  ieps: impuestosGlobales.ieps,
-  isr_retenido: impuestosGlobales.isrRet,
+        // === Receptor ===
+        rfc_receptor: r.getAttribute("Rfc"),
+        nombre_receptor: r.getAttribute("Nombre") || "",
+        domicilio_fiscal_receptor: r.getAttribute("DomicilioFiscalReceptor") || "",
+        residencia_fiscal: r.getAttribute("ResidenciaFiscal") || "",
+        num_reg_id_trib: r.getAttribute("NumRegIdTrib") || "",
+        regimen_fiscal_receptor: r.getAttribute("RegimenFiscalReceptor") || "",
+        uso_cfdi: r.getAttribute("UsoCFDI") || "",
 
-  // ===== TIMBRE =====
-  uuid_cfdi: uuid,
-  fecha_certificacion: timbre.getAttribute("FechaTimbrado"),
-  no_certificado_sat: timbre.getAttribute("NoCertificadoSAT"),
-  rfc_prov_certif: timbre.getAttribute("RfcProvCertif"),
-  sello_cfd: timbre.getAttribute("SelloCFD"),
-  sello_sat: timbre.getAttribute("SelloSAT"),
+        // === Impuestos globales (OPCIÓN 3) ===
+        impuestos_globales: data.impuestosGlobales,
 
-  // ===== CONCEPTOS =====
-  conceptos_detalle: conceptosDetalle, // cada concepto completo
+        // === Timbre ===
+        uuid_cfdi: data.uuid,
+        fecha_certificacion: t.getAttribute("FechaTimbrado"),
+        no_certificado_sat: t.getAttribute("NoCertificadoSAT"),
+        rfc_prov_certif: t.getAttribute("RfcProvCertif"),
+        sello_cfd: t.getAttribute("SelloCFD"),
+        sello_sat: t.getAttribute("SelloSAT"),
 
-  // ===== COMPLEMENTOS =====
-  complementos: complementosDetectados, // XML serializado o JSON
+        // === Conceptos completos ===
+        conceptos_detalle: data.conceptosDetalle,
 
-  // ===== ESTADOS OPERATIVOS =====
-  factura_pagada: "NO",
-  factura_fisicamente: "NO",
-  comentario_factura_fisica: "",
-  fotos: []
-};
+        // === Complementos ===
+        complementos: data.complementosDetectados,
 
+        // === Estados operativos ===
+        factura_pagada: "NO",
+        factura_fisicamente: "NO",
+        comentario_factura_fisica: "",
+        fotos: []
+      };
 
-      // === SUPABASE ===
+      // ==========================================================
+      // SUBABASE
+      // ==========================================================
       if (yaExisteSupa.length === 0) {
         await fetch(`${SUPABASE_URL}/rest/v1/deuda_limpia_pdd`, {
-          method: 'POST',
+          method: "POST",
           headers: {
             apikey: API_KEY,
             Authorization: `Bearer ${API_KEY}`,
-            'Content-Type': 'application/json'
+            "Content-Type": "application/json"
           },
           body: JSON.stringify(datosInsert)
         });
-        itemSupa.textContent = 'Subido';
-        itemSupa.className = 'ok';
+        itemSupa.textContent = "Subido";
+        itemSupa.className = "ok";
         logBitacora(`✅ Subido a Supabase: ${data.uuid}`);
       } else {
-        itemSupa.textContent = 'Ya existe';
-        itemSupa.className = 'warn';
+        itemSupa.textContent = "Ya existe";
+        itemSupa.className = "warn";
         logBitacora(`⚠️ Ya existía en Supabase: ${data.uuid}`);
       }
 
-      // === FIREBASE ===
+      // ==========================================================
+      // FIREBASE
+      // ==========================================================
       if (!yaExisteFirebase) {
         await setDoc(refFirebase, {
           ...datosInsert,
@@ -304,15 +378,16 @@ const datosInsert = {
           estado: "pendiente",
           timestamp: new Date().toISOString()
         });
-        itemFire.textContent = 'Guardado';
-        itemFire.className = 'ok';
+        itemFire.textContent = "Guardado";
+        itemFire.className = "ok";
         logBitacora(`✅ Guardado en Firebase: ${data.uuid}`);
       } else {
-        itemFire.textContent = 'Ya existe';
-        itemFire.className = 'warn';
+        itemFire.textContent = "Ya existe";
+        itemFire.className = "warn";
         logBitacora(`⚠️ Ya existía en Firebase: ${data.uuid}`);
       }
     }
+
     logBitacora("✅ Proceso completado");
   }
 
@@ -324,8 +399,10 @@ const datosInsert = {
 
   window.procesarArchivos = procesarArchivos;
 </script>
-  <footer style="margin-top: 40px; padding: 10px; text-align: center; font-size: 13px; color: #555; border-top: 1px solid #ccc;">
-    © 2025 Deuda Limpia PDD · Desarrollado por Gerardo Quezada versión con bitácora dividida
-  </footer>
+
+<footer style="margin-top: 40px; padding: 10px; text-align: center; font-size: 13px; color: #555; border-top: 1px solid #ccc;">
+  © 2025 Deuda Limpia PDD · Desarrollado por Gerardo Quezada — versión contable completa
+</footer>
+
 </body>
 </html>
