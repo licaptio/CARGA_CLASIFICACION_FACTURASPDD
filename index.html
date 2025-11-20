@@ -109,30 +109,55 @@
         const fecha = comprobante?.getAttribute("Fecha");
         const fechaTimbrado = timbre?.getAttribute("FechaTimbrado") || null;
 
-        let conceptosDetalle = [];
-        const conceptos = xml.getElementsByTagNameNS(cfdiNS, "Concepto");
-        for (let c of conceptos) {
-          const cantidad = parseFloat(c.getAttribute("Cantidad")) || 0;
-          const descripcion = c.getAttribute("Descripcion") || "";
-          const codigoSAT = c.getAttribute("ClaveProdServ") || "";
-          const valorUnitario = parseFloat(c.getAttribute("ValorUnitario")) || 0;
-          conceptosDetalle.push({ cantidad, codigoSAT, descripcion, costoUnitario: valorUnitario });
-        }
+let conceptosDetalle = [];
+const conceptos = xml.getElementsByTagNameNS(cfdiNS, "Concepto");
 
-        archivosDatos.push({ uuid, tipo, receptorRFC, emisorRFC, razonSocial, folio, serie, total, fecha, fecha_certificacion: fechaTimbrado, conceptosDetalle });
+for (let c of conceptos) {
 
-        const supaLi = document.createElement('li');
-        const fireLi = document.createElement('li');
-        supaLi.innerHTML = `<b>${uuid || "undefined"}</b> → <span class='pending'>Pendiente</span>`;
-        fireLi.innerHTML = `<b>${uuid || "undefined"}</b> → <span class='pending'>Pendiente</span>`;
-        document.getElementById('listaSupabase').appendChild(supaLi);
-        document.getElementById('listaFirebase').appendChild(fireLi);
+  // --- Datos básicos del concepto ---
+  const cantidad = parseFloat(c.getAttribute("Cantidad")) || 0;
+  const descripcion = c.getAttribute("Descripcion") || "";
+  const codigoSAT = c.getAttribute("ClaveProdServ") || "";
+  const valorUnitario = parseFloat(c.getAttribute("ValorUnitario")) || 0;
 
-      } catch (e) {
-        logBitacora(`❌ Error al leer XML: ${file.name}`);
-      }
+  // --- Inicializamos impuestos ---
+  let tasaImpuesto = 0;
+  let tipoImpuesto = "";
+
+  // --- Buscar nodo de impuestos dentro del concepto ---
+  const impuestosNodo = c.getElementsByTagNameNS(cfdiNS, "Impuestos")[0];
+
+  if (impuestosNodo) {
+    // Traslados (IVA, IEPS)
+    const traslados = impuestosNodo.getElementsByTagNameNS(cfdiNS, "Traslado");
+
+    if (traslados.length > 0) {
+      const t = traslados[0];
+
+      tasaImpuesto = parseFloat(t.getAttribute("TasaOCuota")) || 0;
+
+      const impuestoSAT = t.getAttribute("Impuesto"); // 002 = IVA | 003 = IEPS
+
+      tipoImpuesto =
+        impuestoSAT === "002"
+          ? "IVA"
+          : impuestoSAT === "003"
+          ? "IEPS"
+          : impuestoSAT;
     }
+  }
+
+  // --- Agregar concepto final ---
+  conceptosDetalle.push({
+    cantidad,
+    codigoSAT,
+    descripcion,
+    costoUnitario: valorUnitario,
+    tasaImpuesto,
+    tipoImpuesto
   });
+}
+
 
   async function procesarArchivos() {
     const supaItems = document.querySelectorAll('#listaSupabase li');
