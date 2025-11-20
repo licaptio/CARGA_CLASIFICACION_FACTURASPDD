@@ -120,15 +120,14 @@ for (let c of conceptos) {
   const codigoSAT = c.getAttribute("ClaveProdServ") || "";
   const valorUnitario = parseFloat(c.getAttribute("ValorUnitario")) || 0;
 
-  // --- Inicializamos impuestos ---
+  // --- Inicializamos impuestos por concepto ---
   let tasaImpuesto = 0;
   let tipoImpuesto = "";
 
-  // --- Buscar nodo de impuestos dentro del concepto ---
+  // --- Nodo impuestos dentro del concepto ---
   const impuestosNodo = c.getElementsByTagNameNS(cfdiNS, "Impuestos")[0];
 
   if (impuestosNodo) {
-    // Traslados (IVA, IEPS)
     const traslados = impuestosNodo.getElementsByTagNameNS(cfdiNS, "Traslado");
 
     if (traslados.length > 0) {
@@ -136,13 +135,15 @@ for (let c of conceptos) {
 
       tasaImpuesto = parseFloat(t.getAttribute("TasaOCuota")) || 0;
 
-      const impuestoSAT = t.getAttribute("Impuesto"); // 002 = IVA | 003 = IEPS
+      const impuestoSAT = t.getAttribute("Impuesto"); // 002=IVA, 003=IEPS, 001=ISR
 
       tipoImpuesto =
         impuestoSAT === "002"
           ? "IVA"
           : impuestoSAT === "003"
           ? "IEPS"
+          : impuestoSAT === "001"
+          ? "ISR"
           : impuestoSAT;
     }
   }
@@ -156,6 +157,23 @@ for (let c of conceptos) {
     tasaImpuesto,
     tipoImpuesto
   });
+}
+
+// 🔥🔥🔥 AQUÍ VIENE TU ERROR ORIGINAL: TE FALTABA ESTA LÍNEA 🔥🔥🔥
+archivosDatos.push({
+  uuid,
+  tipo,
+  receptorRFC,
+  emisorRFC,
+  razonSocial,
+  folio,
+  serie,
+  total,
+  fecha,
+  fecha_certificacion: fechaTimbrado,
+  conceptosDetalle
+});
+
 }
 
 
