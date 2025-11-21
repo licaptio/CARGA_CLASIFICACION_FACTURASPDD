@@ -369,12 +369,12 @@ if (!existeEnSupabase) {
     body: JSON.stringify(datosInsert)
   });
 
-  itemSupa.textContent = "Subido";
+  itemSupa.textContent = "Subido (nuevo)";
   itemSupa.className = "ok";
   logBitacora(`✅ Subido a Supabase: ${data.uuid}`);
 
 } else {
-  itemSupa.textContent = "Ya existe";
+  itemSupa.textContent = "Ya existía (previo)";
   itemSupa.className = "warn";
   logBitacora(`⚠️ Ya existía en Supabase: ${data.uuid}`);
 }
@@ -389,14 +389,15 @@ if (!existeEnSupabase) {
           estado: "pendiente",
           timestamp: new Date().toISOString()
         });
-        itemFire.textContent = "Guardado";
+        itemFire.textContent = "Guardado (nuevo)";
         itemFire.className = "ok";
         logBitacora(`✅ Guardado en Firebase: ${data.uuid}`);
-      } else {
-        itemFire.textContent = "Ya existe";
-        itemFire.className = "warn";
-        logBitacora(`⚠️ Ya existía en Firebase: ${data.uuid}`);
-      }
+} else {
+  itemFire.textContent = "Ya existía (previo)";
+  itemFire.className = "warn";
+  logBitacora(`⚠️ Ya existía en Firebase: ${data.uuid}`);
+}
+
     }
 
     logBitacora("✅ Proceso completado");
