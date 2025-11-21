@@ -103,7 +103,13 @@
         const conceptos = xml.getElementsByTagNameNS(cfdiNS, "Concepto");
         const impuestosGlobalesNodo = xml.getElementsByTagNameNS(cfdiNS, "Impuestos")[0];
 
-        const uuid = timbre?.getAttribute("UUID")?.toUpperCase().trim();
+        const uuidRaw =
+  timbre?.getAttribute("UUID") ||
+  timbre?.getAttribute("uuid") ||
+  "";
+
+const uuid = uuidRaw.toUpperCase().trim();
+
         const tipo = comprobante?.getAttribute("TipoDeComprobante");
         const receptorRFC = receptor?.getAttribute("Rfc")?.toUpperCase().trim();
 
@@ -322,7 +328,6 @@
         impuestos_globales: data.impuestosGlobales,
 
         // === Timbre ===
-        uuid_cfdi: data.uuid,
         fecha_certificacion: t.getAttribute("FechaTimbrado"),
         no_certificado_sat: t.getAttribute("NoCertificadoSAT"),
         rfc_prov_certif: t.getAttribute("RfcProvCertif"),
@@ -345,11 +350,10 @@
 // ==========================================================
 // SUPABASE
 // ==========================================================
-// ==========================================================
-// SUPABASE
-// ==========================================================
+const uuidMayus = data.uuid.toUpperCase();
+
 const existeSupa = await fetch(
-  `${SUPABASE_URL}/rest/v1/deuda_limpia_pdd?uuid_cfdi=eq.${data.uuid}&select=uuid_cfdi&limit=1`,
+  `${SUPABASE_URL}/rest/v1/deuda_limpia_pdd?select=uuid_cfdi&uuid_cfdi=eq.${uuidMayus}`,
   {
     headers: {
       apikey: API_KEY,
@@ -359,7 +363,8 @@ const existeSupa = await fetch(
 );
 
 const respuestaSupa = await existeSupa.json();
-const existeEnSupabase = Array.isArray(respuestaSupa) && respuestaSupa.length > 0;
+const existeEnSupabase =
+  Array.isArray(respuestaSupa) && respuestaSupa.length > 0;
 
 if (!existeEnSupabase) {
   await fetch(`${SUPABASE_URL}/rest/v1/deuda_limpia_pdd`, {
@@ -369,11 +374,19 @@ if (!existeEnSupabase) {
       Authorization: `Bearer ${API_KEY}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(datosInsert)
+    body: JSON.stringify({
+  ...datosInsert,
+  uuid_cfdi: uuidMayus
+})
+
   });
 
-  itemSupa.textContent = "Subido (nuevo)";
-  itemSupa.className = "ok";
+  itemSupa.classList.remove("pending");
+itemSupa.classList.remove("warn");
+itemSupa.classList.remove("err");
+itemSupa.textContent = "Subido (nuevo)";
+itemSupa.classList.add("ok");
+
   logBitacora(`✅ Subido a Supabase: ${data.uuid}`);
 
 } else {
@@ -386,12 +399,14 @@ if (!existeEnSupabase) {
       // FIREBASE
       // ==========================================================
       if (!yaExisteFirebase) {
-        await setDoc(refFirebase, {
-          ...datosInsert,
-          origen: "SUPABASE",
-          estado: "pendiente",
-          timestamp: new Date().toISOString()
-        });
+await setDoc(refFirebase, {
+  ...datosInsert,
+  uuid_cfdi: uuidMayus,
+  origen: "SUPABASE",
+  estado: "pendiente",
+  timestamp: new Date().toISOString()
+});
+
         itemFire.textContent = "Guardado (nuevo)";
         itemFire.className = "ok";
         logBitacora(`✅ Guardado en Firebase: ${data.uuid}`);
