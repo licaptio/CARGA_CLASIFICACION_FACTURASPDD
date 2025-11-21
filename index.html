@@ -263,9 +263,9 @@
       if (!data.uuid) continue;
       if (data.tipo !== "I" || data.receptorRFC !== "PDD031204KL5") {
         const motivo = `TipoDeComprobante inválido o RFC no permitido`;
-        itemSupa.textContent = "Rechazado";
+        itemSupa.textContent = "Rechazado (tipo o RFC inválido)"
         itemSupa.className = "err";
-        itemFire.textContent = "Rechazado";
+        itemFire.textContent = "Rechazado (tipo o RFC inválido)";
         itemFire.className = "err";
         logBitacora(`❌ ${data.uuid} - ${motivo}`);
         continue;
