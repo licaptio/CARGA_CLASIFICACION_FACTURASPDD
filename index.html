@@ -269,10 +269,14 @@ const uuid = uuidRaw.toUpperCase().trim();
       if (!data.uuid) continue;
       if (data.tipo !== "I" || data.receptorRFC !== "PDD031204KL5") {
         const motivo = `TipoDeComprobante inválido o RFC no permitido`;
-        itemSupa.textContent = "Rechazado (tipo o RFC inválido)"
-        itemSupa.className = "err";
-        itemFire.textContent = "Rechazado (tipo o RFC inválido)";
-        itemFire.className = "err";
+itemSupa.classList.remove("pending","warn","err","ok");
+itemSupa.textContent = "Rechazado (tipo o RFC inválido)";
+itemSupa.classList.add("err");
+
+itemFire.classList.remove("pending","warn","err","ok");
+itemFire.textContent = "Rechazado (tipo o RFC inválido)";
+itemFire.classList.add("err");
+
         logBitacora(`❌ ${data.uuid} - ${motivo}`);
         continue;
       }
@@ -390,8 +394,9 @@ itemSupa.classList.add("ok");
   logBitacora(`✅ Subido a Supabase: ${data.uuid}`);
 
 } else {
+  itemSupa.classList.remove("pending","warn","err","ok");
   itemSupa.textContent = "Ya existía (previo)";
-  itemSupa.className = "warn";
+  itemSupa.classList.add("warn");
   logBitacora(`⚠️ Ya existía en Supabase: ${data.uuid}`);
 }
 
@@ -407,16 +412,18 @@ await setDoc(refFirebase, {
   timestamp: new Date().toISOString()
 });
 
-        itemFire.textContent = "Guardado (nuevo)";
-        itemFire.className = "ok";
+itemFire.classList.remove("pending","warn","err","ok");
+itemFire.textContent = "Guardado (nuevo)";
+itemFire.classList.add("ok");
+
         logBitacora(`✅ Guardado en Firebase: ${data.uuid}`);
 } else {
+  itemFire.classList.remove("pending","warn","err","ok");
   itemFire.textContent = "Ya existía (previo)";
-  itemFire.className = "warn";
+  itemFire.classList.add("warn");
   logBitacora(`⚠️ Ya existía en Firebase: ${data.uuid}`);
 }
-
-    }
+}
 
     logBitacora("✅ Proceso completado");
   }
