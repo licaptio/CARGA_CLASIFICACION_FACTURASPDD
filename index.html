@@ -275,10 +275,6 @@
       const snapFirebase = await getDoc(refFirebase);
       const yaExisteFirebase = snapFirebase.exists();
 
-      const existeSupa = await fetch(`${SUPABASE_URL}/rest/v1/deuda_limpia_pdd?uuid_cfdi=eq.${data.uuid}`, {
-        headers: { apikey: API_KEY, Authorization: `Bearer ${API_KEY}` }
-      });
-      const yaExisteSupa = await existeSupa.json();
 
       // ==========================================================
       // ESTRUCTURA FINAL PARA SUBIR
@@ -346,27 +342,42 @@
         fotos: []
       };
 
-      // ==========================================================
-      // SUBABASE
-      // ==========================================================
-      if (yaExisteSupa.length === 0) {
-        await fetch(`${SUPABASE_URL}/rest/v1/deuda_limpia_pdd`, {
-          method: "POST",
-          headers: {
-            apikey: API_KEY,
-            Authorization: `Bearer ${API_KEY}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(datosInsert)
-        });
-        itemSupa.textContent = "Subido";
-        itemSupa.className = "ok";
-        logBitacora(`✅ Subido a Supabase: ${data.uuid}`);
-      } else {
-        itemSupa.textContent = "Ya existe";
-        itemSupa.className = "warn";
-        logBitacora(`⚠️ Ya existía en Supabase: ${data.uuid}`);
-      }
+// ==========================================================
+// SUPABASE
+// ==========================================================
+const existeSupa = await fetch(
+  `${SUPABASE_URL}/rest/v1/deuda_limpia_pdd?uuid_cfdi=eq.${data.uuid}&select=uuid_cfdi&limit=1`,
+  {
+    headers: {
+      apikey: API_KEY,
+      Authorization: `Bearer ${API_KEY}`
+    }
+  }
+);
+
+const respuestaSupa = await existeSupa.json();
+const existeEnSupabase = Array.isArray(respuestaSupa) && respuestaSupa.length > 0;
+
+if (!existeEnSupabase) {
+  await fetch(`${SUPABASE_URL}/rest/v1/deuda_limpia_pdd`, {
+    method: "POST",
+    headers: {
+      apikey: API_KEY,
+      Authorization: `Bearer ${API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(datosInsert)
+  });
+
+  itemSupa.textContent = "Subido";
+  itemSupa.className = "ok";
+  logBitacora(`✅ Subido a Supabase: ${data.uuid}`);
+
+} else {
+  itemSupa.textContent = "Ya existe";
+  itemSupa.className = "warn";
+  logBitacora(`⚠️ Ya existía en Supabase: ${data.uuid}`);
+}
 
       // ==========================================================
       // FIREBASE
